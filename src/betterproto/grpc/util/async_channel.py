@@ -104,7 +104,7 @@ class AsyncChannel(AsyncIterable[T]):
         """
         Returns True if this channel is closed and no-longer accepting new items
         """
-        return self._closed
+        pass
 
     def done(self) -> bool:
         """
@@ -114,9 +114,7 @@ class AsyncChannel(AsyncIterable[T]):
         which case any further attempts to receive an item from this channel will raise
         a ChannelDone exception.
         """
-        # After close the channel is not yet done until there is at least one waiting
-        # receiver per enqueued item.
-        return self._closed and self._queue.qsize() <= self._waiting_receivers
+        pass
 
     async def send_from(
         self, source: Union[Iterable[T], AsyncIterable[T]], close: bool = False
@@ -130,28 +128,14 @@ class AsyncChannel(AsyncIterable[T]):
             if True then the channel will be closed after the source has been exhausted
 
         """
-        if self._closed:
-            raise ChannelClosed("Cannot send through a closed channel")
-        if isinstance(source, AsyncIterable):
-            async for item in source:
-                await self._queue.put(item)
-        else:
-            for item in source:
-                await self._queue.put(item)
-        if close:
-            # Complete the closing process
-            self.close()
-        return self
+        pass
 
     async def send(self, item: T) -> "AsyncChannel[T]":
         """
         Send a single item over this channel.
         :param item: The item to send
         """
-        if self._closed:
-            raise ChannelClosed("Cannot send through a closed channel")
-        await self._queue.put(item)
-        return self
+        pass
 
     async def receive(self) -> Optional[T]:
         """
@@ -159,35 +143,20 @@ class AsyncChannel(AsyncIterable[T]):
         or None if the channel is closed before another item is sent.
         :return: An item from the channel
         """
-        if self.done():
-            raise ChannelDone("Cannot receive from a closed channel")
-        self._waiting_receivers += 1
-        try:
-            result = await self._queue.get()
-            if result is self.__flush:
-                return None
-            return result
-        finally:
-            self._waiting_receivers -= 1
-            self._queue.task_done()
+        pass
 
     def close(self):
         """
         Close this channel to new items
         """
-        self._closed = True
-        asyncio.ensure_future(self._flush_queue())
+        pass
 
     async def _flush_queue(self):
         """
         To be called after the channel is closed. Pushes a number of self.__flush
         objects to the queue to ensure no waiting consumers get deadlocked.
         """
-        if not self._flushed:
-            self._flushed = True
-            deadlocked_receivers = max(0, self._waiting_receivers - self._queue.qsize())
-            for _ in range(deadlocked_receivers):
-                await self._queue.put(self.__flush)
+        pass
 
     # A special signal object for flushing the queue when the channel is closed
     __flush = object()

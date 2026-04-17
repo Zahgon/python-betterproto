@@ -2348,16 +2348,6 @@ class Struct(betterproto.Message):
         self.fields = fields
         return self
 
-    def to_dict(
-        self,
-        casing: betterproto.Casing = betterproto.Casing.CAMEL,
-        include_default_values: bool = False,
-    ) -> Dict[str, Any]:
-        output = {**self.fields}
-        for k in self.fields:
-            if hasattr(self.fields[k], "to_dict"):
-                output[k] = self.fields[k].to_dict(casing, include_default_values)
-        return output
 
 
 @dataclass(eq=False, repr=False)
@@ -2399,9 +2389,6 @@ class Value(betterproto.Message):
     )
     """Represents a repeated `Value`."""
 
-    @model_validator(mode="after")
-    def check_oneof(cls, values):
-        return cls._validate_field_groups(values)
 
 
 @dataclass(eq=False, repr=False)

@@ -266,16 +266,8 @@ def uint64_field(
     return dataclass_field(number, TYPE_UINT64, group=group, optional=optional)
 
 
-def sint32_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_SINT32, group=group, optional=optional)
 
 
-def sint64_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_SINT64, group=group, optional=optional)
 
 
 def float_field(
@@ -290,28 +282,12 @@ def double_field(
     return dataclass_field(number, TYPE_DOUBLE, group=group, optional=optional)
 
 
-def fixed32_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_FIXED32, group=group, optional=optional)
 
 
-def fixed64_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_FIXED64, group=group, optional=optional)
 
 
-def sfixed32_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_SFIXED32, group=group, optional=optional)
 
 
-def sfixed64_field(
-    number: int, group: Optional[str] = None, optional: bool = False
-) -> Any:
-    return dataclass_field(number, TYPE_SFIXED64, group=group, optional=optional)
 
 
 def string_field(
@@ -359,111 +335,27 @@ def _pack_fmt(proto_type: str) -> str:
 
 def dump_varint(value: int, stream: "SupportsWrite[bytes]") -> None:
     """Encodes a single varint and dumps it into the provided stream."""
-    if value < -(1 << 63):
-        raise ValueError(
-            "Negative value is not representable as a 64-bit integer - unable to encode a varint within 10 bytes."
-        )
-    elif value < 0:
-        value += 1 << 64
-
-    bits = value & 0x7F
-    value >>= 7
-    while value:
-        stream.write((0x80 | bits).to_bytes(1, "little"))
-        bits = value & 0x7F
-        value >>= 7
-    stream.write(bits.to_bytes(1, "little"))
+    pass
 
 
 def encode_varint(value: int) -> bytes:
     """Encodes a single varint value for serialization."""
-    with BytesIO() as stream:
-        dump_varint(value, stream)
-        return stream.getvalue()
+    pass
 
 
 def size_varint(value: int) -> int:
     """Calculates the size in bytes that a value would take as a varint."""
-    if value < -(1 << 63):
-        raise ValueError(
-            "Negative value is not representable as a 64-bit integer - unable to encode a varint within 10 bytes."
-        )
-    elif value < 0:
-        return 10
-    elif value == 0:
-        return 1
-    else:
-        return math.ceil(value.bit_length() / 7)
+    pass
 
 
 def _preprocess_single(proto_type: str, wraps: str, value: Any) -> bytes:
     """Adjusts values before serialization."""
-    if proto_type in (
-        TYPE_ENUM,
-        TYPE_BOOL,
-        TYPE_INT32,
-        TYPE_INT64,
-        TYPE_UINT32,
-        TYPE_UINT64,
-    ):
-        return encode_varint(value)
-    elif proto_type in (TYPE_SINT32, TYPE_SINT64):
-        # Handle zig-zag encoding.
-        return encode_varint(value << 1 if value >= 0 else (value << 1) ^ (~0))
-    elif proto_type in FIXED_TYPES:
-        return struct.pack(_pack_fmt(proto_type), value)
-    elif proto_type == TYPE_STRING:
-        return value.encode("utf-8")
-    elif proto_type == TYPE_MESSAGE:
-        if isinstance(value, datetime):
-            # Convert the `datetime` to a timestamp message.
-            value = _Timestamp.from_datetime(value)
-        elif isinstance(value, timedelta):
-            # Convert the `timedelta` to a duration message.
-            value = _Duration.from_timedelta(value)
-        elif wraps:
-            if value is None:
-                return b""
-            value = _get_wrapper(wraps)(value=value)
-
-        return bytes(value)
-
-    return value
+    pass
 
 
 def _len_preprocessed_single(proto_type: str, wraps: str, value: Any) -> int:
     """Calculate the size of adjusted values for serialization without fully serializing them."""
-    if proto_type in (
-        TYPE_ENUM,
-        TYPE_BOOL,
-        TYPE_INT32,
-        TYPE_INT64,
-        TYPE_UINT32,
-        TYPE_UINT64,
-    ):
-        return size_varint(value)
-    elif proto_type in (TYPE_SINT32, TYPE_SINT64):
-        # Handle zig-zag encoding.
-        return size_varint(value << 1 if value >= 0 else (value << 1) ^ (~0))
-    elif proto_type in FIXED_TYPES:
-        return len(struct.pack(_pack_fmt(proto_type), value))
-    elif proto_type == TYPE_STRING:
-        return len(value.encode("utf-8"))
-    elif proto_type == TYPE_MESSAGE:
-        if isinstance(value, datetime):
-            # Convert the `datetime` to a timestamp message.
-            value = _Timestamp.from_datetime(value)
-        elif isinstance(value, timedelta):
-            # Convert the `timedelta` to a duration message.
-            value = _Duration.from_timedelta(value)
-        elif wraps:
-            if value is None:
-                return 0
-            value = _get_wrapper(wraps)(value=value)
-
-        return len(bytes(value))
-
-    return len(value)
+    pass
 
 
 def _serialize_single(
@@ -475,26 +367,7 @@ def _serialize_single(
     wraps: str = "",
 ) -> bytes:
     """Serializes a single field and value."""
-    value = _preprocess_single(proto_type, wraps, value)
-
-    output = bytearray()
-    if proto_type in WIRE_VARINT_TYPES:
-        key = encode_varint(field_number << 3)
-        output += key + value
-    elif proto_type in WIRE_FIXED_32_TYPES:
-        key = encode_varint((field_number << 3) | 5)
-        output += key + value
-    elif proto_type in WIRE_FIXED_64_TYPES:
-        key = encode_varint((field_number << 3) | 1)
-        output += key + value
-    elif proto_type in WIRE_LEN_DELIM_TYPES:
-        if len(value) or serialize_empty or wraps:
-            key = encode_varint((field_number << 3) | 2)
-            output += key + encode_varint(len(value)) + value
-    else:
-        raise NotImplementedError(proto_type)
-
-    return bytes(output)
+    pass
 
 
 def _len_single(
@@ -506,20 +379,7 @@ def _len_single(
     wraps: str = "",
 ) -> int:
     """Calculates the size of a serialized single field and value."""
-    size = _len_preprocessed_single(proto_type, wraps, value)
-    if proto_type in WIRE_VARINT_TYPES:
-        size += size_varint(field_number << 3)
-    elif proto_type in WIRE_FIXED_32_TYPES:
-        size += size_varint((field_number << 3) | 5)
-    elif proto_type in WIRE_FIXED_64_TYPES:
-        size += size_varint((field_number << 3) | 1)
-    elif proto_type in WIRE_LEN_DELIM_TYPES:
-        if size or serialize_empty or wraps:
-            size += size_varint((field_number << 3) | 2) + size_varint(size)
-    else:
-        raise NotImplementedError(proto_type)
-
-    return size
+    pass
 
 
 def _parse_float(value: Any) -> float:
@@ -557,13 +417,7 @@ def _dump_float(value: float) -> Union[float, str]:
     Union[float, str]
         Dumped value, either a float or the strings
     """
-    if value == float("inf"):
-        return INFINITY
-    if value == -float("inf"):
-        return NEG_INFINITY
-    if isinstance(value, float) and math.isnan(value):
-        return NAN
-    return value
+    pass
 
 
 def load_varint(stream: "SupportsRead[bytes]") -> Tuple[int, bytes]:
@@ -632,29 +486,6 @@ def load_fields(stream: "SupportsRead[bytes]") -> Generator[ParsedField, None, N
         yield ParsedField(number=number, wire_type=wire_type, value=decoded, raw=raw)
 
 
-def parse_fields(value: bytes) -> Generator[ParsedField, None, None]:
-    i = 0
-    while i < len(value):
-        start = i
-        num_wire, i = decode_varint(value, i)
-        number = num_wire >> 3
-        wire_type = num_wire & 0x7
-
-        decoded: Any = None
-        if wire_type == WIRE_VARINT:
-            decoded, i = decode_varint(value, i)
-        elif wire_type == WIRE_FIXED_64:
-            decoded, i = value[i : i + 8], i + 8
-        elif wire_type == WIRE_LEN_DELIM:
-            length, i = decode_varint(value, i)
-            decoded = value[i : i + length]
-            i += length
-        elif wire_type == WIRE_FIXED_32:
-            decoded, i = value[i : i + 4], i + 4
-
-        yield ParsedField(
-            number=number, wire_type=wire_type, value=decoded, raw=value[start:i]
-        )
 
 
 class ProtoClassMetadata:
@@ -705,37 +536,7 @@ class ProtoClassMetadata:
         self.default_gen = self._get_default_gen(cls, fields)
         self.cls_by_field = self._get_cls_by_field(cls, fields)
 
-    @staticmethod
-    def _get_default_gen(
-        cls: Type["Message"], fields: Iterable[dataclasses.Field]
-    ) -> Dict[str, Callable[[], Any]]:
-        return {field.name: cls._get_field_default_gen(field) for field in fields}
 
-    @staticmethod
-    def _get_cls_by_field(
-        cls: Type["Message"], fields: Iterable[dataclasses.Field]
-    ) -> Dict[str, Type]:
-        field_cls = {}
-
-        for field in fields:
-            meta = FieldMetadata.get(field)
-            if meta.proto_type == TYPE_MAP:
-                assert meta.map_types
-                kt = cls._cls_for(field, index=0)
-                vt = cls._cls_for(field, index=1)
-                field_cls[field.name] = dataclasses.make_dataclass(
-                    "Entry",
-                    [
-                        ("key", kt, dataclass_field(1, meta.map_types[0])),
-                        ("value", vt, dataclass_field(2, meta.map_types[1])),
-                    ],
-                    bases=(Message,),
-                )
-                field_cls[f"{field.name}.value"] = vt
-            else:
-                field_cls[field.name] = cls._cls_for(field)
-
-        return field_cls
 
 
 class Message(ABC):
@@ -784,8 +585,6 @@ class Message(ABC):
         self.__dict__["_unknown_fields"] = b""
         self.__dict__["_group_current"] = group_current
 
-    def __raw_get(self, name: str) -> Any:
-        return super().__getattribute__(name)
 
     def __eq__(self, other) -> bool:
         if type(self) is not type(other):
@@ -919,11 +718,7 @@ class Message(ABC):
         It may be initialized multiple times in a multi-threaded environment,
         but that won't affect the correctness.
         """
-        try:
-            return cls._betterproto_meta
-        except AttributeError:
-            cls._betterproto_meta = meta = ProtoClassMetadata(cls)
-            return meta
+        pass
 
     def dump(self, stream: "SupportsWrite[bytes]", delimit: bool = False) -> None:
         """
@@ -936,101 +731,7 @@ class Message(ABC):
         delimit:
             Whether to prefix the message with a varint declaring its size.
         """
-        if delimit == SIZE_DELIMITED:
-            dump_varint(len(self), stream)
-
-        for field_name, meta in self._betterproto.meta_by_field_name.items():
-            try:
-                value = getattr(self, field_name)
-            except AttributeError:
-                continue
-
-            if value is None:
-                # Optional items should be skipped. This is used for the Google
-                # wrapper types and proto3 field presence/optional fields.
-                continue
-
-            # Being selected in a a group means this field is the one that is
-            # currently set in a `oneof` group, so it must be serialized even
-            # if the value is the default zero value.
-            #
-            # Note that proto3 field presence/optional fields are put in a
-            # synthetic single-item oneof by protoc, which helps us ensure we
-            # send the value even if the value is the default zero value.
-            selected_in_group = bool(meta.group) or meta.optional
-
-            # Empty messages can still be sent on the wire if they were
-            # set (or received empty).
-            serialize_empty = isinstance(value, Message) and value._serialized_on_wire
-
-            include_default_value_for_oneof = self._include_default_value_for_oneof(
-                field_name=field_name, meta=meta
-            )
-
-            if value == self._get_field_default(field_name) and not (
-                selected_in_group or serialize_empty or include_default_value_for_oneof
-            ):
-                # Default (zero) values are not serialized. Two exceptions are
-                # if this is the selected oneof item or if we know we have to
-                # serialize an empty message (i.e. zero value was explicitly
-                # set by the user).
-                continue
-
-            if isinstance(value, list):
-                if meta.proto_type in PACKED_TYPES:
-                    # Packed lists look like a length-delimited field. First,
-                    # preprocess/encode each value into a buffer and then
-                    # treat it like a field of raw bytes.
-                    buf = bytearray()
-                    for item in value:
-                        buf += _preprocess_single(meta.proto_type, "", item)
-                    stream.write(_serialize_single(meta.number, TYPE_BYTES, buf))
-                else:
-                    for item in value:
-                        stream.write(
-                            _serialize_single(
-                                meta.number,
-                                meta.proto_type,
-                                item,
-                                wraps=meta.wraps or "",
-                                serialize_empty=True,
-                            )
-                            # if it's an empty message it still needs to be represented
-                            # as an item in the repeated list
-                            or b"\n\x00"
-                        )
-
-            elif isinstance(value, dict):
-                for k, v in value.items():
-                    assert meta.map_types
-                    sk = _serialize_single(1, meta.map_types[0], k)
-                    sv = _serialize_single(2, meta.map_types[1], v)
-                    stream.write(
-                        _serialize_single(meta.number, meta.proto_type, sk + sv)
-                    )
-            else:
-                # If we have an empty string and we're including the default value for
-                # a oneof, make sure we serialize it. This ensures that the byte string
-                # output isn't simply an empty string. This also ensures that round trip
-                # serialization will keep `which_one_of` calls consistent.
-                if (
-                    isinstance(value, str)
-                    and value == ""
-                    and include_default_value_for_oneof
-                ):
-                    serialize_empty = True
-
-                stream.write(
-                    _serialize_single(
-                        meta.number,
-                        meta.proto_type,
-                        value,
-                        serialize_empty=serialize_empty or bool(selected_in_group),
-                        wraps=meta.wraps or "",
-                    )
-                )
-
-        stream.write(self._unknown_fields)
+        pass
 
     def __bytes__(self) -> bytes:
         """
@@ -1160,23 +861,12 @@ class Message(ABC):
     def __reduce__(self) -> Tuple[Any, ...]:
         return (self.__class__.FromString, (bytes(self),))
 
-    @classmethod
-    def _type_hint(cls, field_name: str) -> Type:
-        return cls._type_hints()[field_name]
 
-    @classmethod
-    def _type_hints(cls) -> Dict[str, Type]:
-        module = sys.modules[cls.__module__]
-        return get_type_hints(cls, module.__dict__, {})
 
     @classmethod
     def _cls_for(cls, field: dataclasses.Field, index: int = 0) -> Type:
         """Get the message class for a field from the type hints."""
-        field_cls = cls._type_hint(field.name)
-        if hasattr(field_cls, "__args__") and index >= 0:
-            if field_cls.__args__ is not None:
-                field_cls = field_cls.__args__[index]
-        return field_cls
+        pass
 
     def _get_field_default(self, field_name: str) -> Any:
         with warnings.catch_warnings():
@@ -1184,33 +874,6 @@ class Message(ABC):
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             return self._betterproto.default_gen[field_name]()
 
-    @classmethod
-    def _get_field_default_gen(cls, field: dataclasses.Field) -> Any:
-        t = cls._type_hint(field.name)
-
-        is_310_union = isinstance(t, _types_UnionType)
-        if hasattr(t, "__origin__") or is_310_union:
-            if is_310_union or t.__origin__ is Union:
-                # This is an optional field (either wrapped, or using proto3
-                # field presence). For setting the default we really don't care
-                # what kind of field it is.
-                return type(None)
-            if t.__origin__ is list:
-                # This is some kind of list (repeated) field.
-                return list
-            if t.__origin__ is dict:
-                # This is some kind of map (dict in Python).
-                return dict
-            return t
-        if issubclass(t, Enum):
-            # Enums always default to zero.
-            return t.try_value
-        if t is datetime:
-            # Offsets are relative to 1970-01-01T00:00:00Z
-            return datetime_default_gen
-        # This is either a primitive scalar or another message type. Calling
-        # it should result in its zero value.
-        return t
 
     def _postprocess_single(
         self, wire_type: int, meta: FieldMetadata, field_name: str, value: Any
@@ -1256,12 +919,6 @@ class Message(ABC):
 
         return value
 
-    def _include_default_value_for_oneof(
-        self, field_name: str, meta: FieldMetadata
-    ) -> bool:
-        return (
-            meta.group is not None and self._group_current.get(meta.group) == field_name
-        )
 
     def load(
         self: T,
@@ -1402,7 +1059,7 @@ class Message(ABC):
         :class:`Message`
             The initialized message.
         """
-        return cls().parse(data)
+        pass
 
     def to_dict(
         self, casing: Casing = Casing.CAMEL, include_default_values: bool = False
@@ -1425,121 +1082,7 @@ class Message(ABC):
         Dict[:class:`str`, Any]
             The JSON serializable dict representation of this object.
         """
-        output: Dict[str, Any] = {}
-        field_types = self._type_hints()
-        defaults = self._betterproto.default_gen
-        for field_name, meta in self._betterproto.meta_by_field_name.items():
-            field_is_repeated = defaults[field_name] is list
-            try:
-                value = getattr(self, field_name)
-            except AttributeError:
-                value = self._get_field_default(field_name)
-            cased_name = casing(field_name).rstrip("_")  # type: ignore
-            if meta.proto_type == TYPE_MESSAGE:
-                if isinstance(value, datetime):
-                    if (
-                        value != DATETIME_ZERO
-                        or include_default_values
-                        or self._include_default_value_for_oneof(
-                            field_name=field_name, meta=meta
-                        )
-                    ):
-                        output[cased_name] = _Timestamp.timestamp_to_json(value)
-                elif isinstance(value, timedelta):
-                    if (
-                        value != timedelta(0)
-                        or include_default_values
-                        or self._include_default_value_for_oneof(
-                            field_name=field_name, meta=meta
-                        )
-                    ):
-                        output[cased_name] = _Duration.delta_to_json(value)
-                elif meta.wraps:
-                    if value is not None or include_default_values:
-                        output[cased_name] = value
-                elif field_is_repeated:
-                    # Convert each item.
-                    cls = self._betterproto.cls_by_field[field_name]
-                    if cls == datetime:
-                        value = [_Timestamp.timestamp_to_json(i) for i in value]
-                    elif cls == timedelta:
-                        value = [_Duration.delta_to_json(i) for i in value]
-                    else:
-                        value = [
-                            i.to_dict(casing, include_default_values) for i in value
-                        ]
-                    if value or include_default_values:
-                        output[cased_name] = value
-                elif value is None:
-                    if include_default_values:
-                        output[cased_name] = value
-                elif (
-                    value._serialized_on_wire
-                    or include_default_values
-                    or self._include_default_value_for_oneof(
-                        field_name=field_name, meta=meta
-                    )
-                ):
-                    output[cased_name] = value.to_dict(casing, include_default_values)
-            elif meta.proto_type == TYPE_MAP:
-                output_map = {**value}
-                for k in value:
-                    if hasattr(value[k], "to_dict"):
-                        output_map[k] = value[k].to_dict(casing, include_default_values)
-
-                if value or include_default_values:
-                    output[cased_name] = output_map
-            elif (
-                value != self._get_field_default(field_name)
-                or include_default_values
-                or self._include_default_value_for_oneof(
-                    field_name=field_name, meta=meta
-                )
-            ):
-                if meta.proto_type in INT_64_TYPES:
-                    if field_is_repeated:
-                        output[cased_name] = [str(n) for n in value]
-                    elif value is None:
-                        if include_default_values:
-                            output[cased_name] = value
-                    else:
-                        output[cased_name] = str(value)
-                elif meta.proto_type == TYPE_BYTES:
-                    if field_is_repeated:
-                        output[cased_name] = [
-                            b64encode(b).decode("utf8") for b in value
-                        ]
-                    elif value is None and include_default_values:
-                        output[cased_name] = value
-                    else:
-                        output[cased_name] = b64encode(value).decode("utf8")
-                elif meta.proto_type == TYPE_ENUM:
-                    if field_is_repeated:
-                        enum_class = field_types[field_name].__args__[0]
-                        if isinstance(value, typing.Iterable) and not isinstance(
-                            value, str
-                        ):
-                            output[cased_name] = [enum_class(el).name for el in value]
-                        else:
-                            # transparently upgrade single value to repeated
-                            output[cased_name] = [enum_class(value).name]
-                    elif value is None:
-                        if include_default_values:
-                            output[cased_name] = value
-                    elif meta.optional:
-                        enum_class = field_types[field_name].__args__[0]
-                        output[cased_name] = enum_class(value).name
-                    else:
-                        enum_class = field_types[field_name]  # noqa
-                        output[cased_name] = enum_class(value).name
-                elif meta.proto_type in (TYPE_FLOAT, TYPE_DOUBLE):
-                    if field_is_repeated:
-                        output[cased_name] = [_dump_float(n) for n in value]
-                    else:
-                        output[cased_name] = _dump_float(value)
-                else:
-                    output[cased_name] = value
-        return output
+        pass
 
     @classmethod
     def _from_dict_init(cls, mapping: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -1677,10 +1220,7 @@ class Message(ABC):
         :class:`str`
             The JSON representation of the message.
         """
-        return json.dumps(
-            self.to_dict(include_default_values=include_default_values, casing=casing),
-            indent=indent,
-        )
+        pass
 
     def from_json(self: T, value: Union[str, bytes]) -> T:
         """A helper function to return the message instance from its JSON
@@ -1701,7 +1241,7 @@ class Message(ABC):
         :class:`Message`
             The initialized message.
         """
-        return self.from_dict(json.loads(value))
+        pass
 
     def to_pydict(
         self, casing: Casing = Casing.CAMEL, include_default_values: bool = False
@@ -1724,66 +1264,7 @@ class Message(ABC):
         Dict[:class:`str`, Any]
             The python dict representation of this object.
         """
-        output: Dict[str, Any] = {}
-        defaults = self._betterproto.default_gen
-        for field_name, meta in self._betterproto.meta_by_field_name.items():
-            field_is_repeated = defaults[field_name] is list
-            value = getattr(self, field_name)
-            cased_name = casing(field_name).rstrip("_")  # type: ignore
-            if meta.proto_type == TYPE_MESSAGE:
-                if isinstance(value, datetime):
-                    if (
-                        value != DATETIME_ZERO
-                        or include_default_values
-                        or self._include_default_value_for_oneof(
-                            field_name=field_name, meta=meta
-                        )
-                    ):
-                        output[cased_name] = value
-                elif isinstance(value, timedelta):
-                    if (
-                        value != timedelta(0)
-                        or include_default_values
-                        or self._include_default_value_for_oneof(
-                            field_name=field_name, meta=meta
-                        )
-                    ):
-                        output[cased_name] = value
-                elif meta.wraps:
-                    if value is not None or include_default_values:
-                        output[cased_name] = value
-                elif field_is_repeated:
-                    # Convert each item.
-                    value = [i.to_pydict(casing, include_default_values) for i in value]
-                    if value or include_default_values:
-                        output[cased_name] = value
-                elif value is None:
-                    if include_default_values:
-                        output[cased_name] = None
-                elif (
-                    value._serialized_on_wire
-                    or include_default_values
-                    or self._include_default_value_for_oneof(
-                        field_name=field_name, meta=meta
-                    )
-                ):
-                    output[cased_name] = value.to_pydict(casing, include_default_values)
-            elif meta.proto_type == TYPE_MAP:
-                for k in value:
-                    if hasattr(value[k], "to_pydict"):
-                        value[k] = value[k].to_pydict(casing, include_default_values)
-
-                if value or include_default_values:
-                    output[cased_name] = value
-            elif (
-                value != self._get_field_default(field_name)
-                or include_default_values
-                or self._include_default_value_for_oneof(
-                    field_name=field_name, meta=meta
-                )
-            ):
-                output[cased_name] = value
-        return output
+        pass
 
     def from_pydict(self: T, value: Mapping[str, Any]) -> T:
         """
@@ -1800,41 +1281,7 @@ class Message(ABC):
         :class:`Message`
             The initialized message.
         """
-        self._serialized_on_wire = True
-        for key in value:
-            field_name = safe_snake_case(key)
-            meta = self._betterproto.meta_by_field_name.get(field_name)
-            if not meta:
-                continue
-
-            if value[key] is not None:
-                if meta.proto_type == TYPE_MESSAGE:
-                    v = getattr(self, field_name)
-                    if isinstance(v, list):
-                        cls = self._betterproto.cls_by_field[field_name]
-                        for item in value[key]:
-                            v.append(cls().from_pydict(item))
-                    elif isinstance(v, datetime):
-                        v = value[key]
-                    elif isinstance(v, timedelta):
-                        v = value[key]
-                    elif meta.wraps:
-                        v = value[key]
-                    else:
-                        # NOTE: `from_pydict` mutates the underlying message, so no
-                        # assignment here is necessary.
-                        v.from_pydict(value[key])
-                elif meta.map_types and meta.map_types[1] == TYPE_MESSAGE:
-                    v = getattr(self, field_name)
-                    cls = self._betterproto.cls_by_field[f"{field_name}.value"]
-                    for k in value[key]:
-                        v[k] = cls().from_pydict(value[key][k])
-                else:
-                    v = value[key]
-
-                if v is not None:
-                    setattr(self, field_name, v)
-        return self
+        pass
 
     def is_set(self, name: str) -> bool:
         """
@@ -1850,41 +1297,8 @@ class Message(ABC):
         :class:`bool`
             `True` if field has been set, otherwise `False`.
         """
-        default = (
-            PLACEHOLDER
-            if not self._betterproto.meta_by_field_name[name].optional
-            else None
-        )
-        return self.__raw_get(name) is not default
+        pass
 
-    @classmethod
-    def _validate_field_groups(cls, values):
-        group_to_one_ofs = cls._betterproto.oneof_field_by_group
-        field_name_to_meta = cls._betterproto.meta_by_field_name
-
-        for group, field_set in group_to_one_ofs.items():
-            if len(field_set) == 1:
-                (field,) = field_set
-                field_name = field.name
-                meta = field_name_to_meta[field_name]
-
-                # This is a synthetic oneof; we should ignore it's presence and not consider it as a oneof.
-                if meta.optional:
-                    continue
-
-            set_fields = [
-                field.name
-                for field in field_set
-                if getattr(values, field.name, None) is not None
-            ]
-
-            if len(set_fields) > 1:
-                set_fields_str = ", ".join(set_fields)
-                raise ValueError(
-                    f"Group {group} has more than one value; fields {set_fields_str} are not None"
-                )
-
-        return values
 
 
 Message.__annotations__ = {}  # HACK to avoid typing.get_type_hints breaking :)
@@ -1894,12 +1308,7 @@ Message.__annotations__ = {}  # HACK to avoid typing.get_type_hints breaking :)
 try:
     import betterproto_rust_codec
 
-    def __parse_patch(self: T, data: bytes) -> T:
-        betterproto_rust_codec.deserialize(self, data)
-        return self
 
-    def __bytes_patch(self) -> bytes:
-        return betterproto_rust_codec.serialize(self)
 
     Message.parse = __parse_patch
     Message.__bytes__ = __bytes_patch
@@ -1918,7 +1327,7 @@ def serialized_on_wire(message: Message) -> bool:
     :class:`bool`
         Whether this message was or should be serialized on the wire.
     """
-    return message._serialized_on_wire
+    pass
 
 
 def which_one_of(message: Message, group_name: str) -> Tuple[str, Optional[Any]]:
@@ -1954,41 +1363,13 @@ from .lib.google.protobuf import (  # noqa
 
 
 class _Duration(Duration):
-    @classmethod
-    def from_timedelta(
-        cls, delta: timedelta, *, _1_microsecond: timedelta = timedelta(microseconds=1)
-    ) -> "_Duration":
-        total_ms = delta // _1_microsecond
-        seconds = int(total_ms / 1e6)
-        nanos = int((total_ms % 1e6) * 1e3)
-        return cls(seconds, nanos)
 
     def to_timedelta(self) -> timedelta:
         return timedelta(seconds=self.seconds, microseconds=self.nanos / 1e3)
 
-    @staticmethod
-    def delta_to_json(delta: timedelta) -> str:
-        parts = str(delta.total_seconds()).split(".")
-        if len(parts) > 1:
-            while len(parts[1]) not in (3, 6, 9):
-                parts[1] = f"{parts[1]}0"
-        return f"{'.'.join(parts)}s"
 
 
 class _Timestamp(Timestamp):
-    @classmethod
-    def from_datetime(cls, dt: datetime) -> "_Timestamp":
-        # manual epoch offset calulation to avoid rounding errors,
-        # to support negative timestamps (before 1970) and skirt
-        # around datetime bugs (apparently 0 isn't a year in [0, 9999]??)
-        offset = dt - DATETIME_ZERO
-        # below is the same as timedelta.total_seconds() but without dividing by 1e6
-        # so we end up with microseconds as integers instead of seconds as float
-        offset_us = (
-            offset.days * 24 * 60 * 60 + offset.seconds
-        ) * 10**6 + offset.microseconds
-        seconds, us = divmod(offset_us, 10**6)
-        return cls(seconds, us * 1000)
 
     def to_datetime(self) -> datetime:
         # datetime.fromtimestamp() expects a timestamp in seconds, not microseconds
@@ -1997,26 +1378,6 @@ class _Timestamp(Timestamp):
         offset = timedelta(seconds=self.seconds, microseconds=self.nanos // 1000)
         return DATETIME_ZERO + offset
 
-    @staticmethod
-    def timestamp_to_json(dt: datetime) -> str:
-        nanos = dt.microsecond * 1e3
-        if dt.tzinfo is not None:
-            # change timezone aware datetime objects to utc
-            dt = dt.astimezone(timezone.utc)
-        copy = dt.replace(microsecond=0, tzinfo=None)
-        result = copy.isoformat()
-        if (nanos % 1e9) == 0:
-            # If there are 0 fractional digits, the fractional
-            # point '.' should be omitted when serializing.
-            return f"{result}Z"
-        if (nanos % 1e6) == 0:
-            # Serialize 3 fractional digits.
-            return f"{result}.{int(nanos // 1e6):03d}Z"
-        if (nanos % 1e3) == 0:
-            # Serialize 6 fractional digits.
-            return f"{result}.{int(nanos // 1e3):06d}Z"
-        # Serialize 9 fractional digits.
-        return f"{result}.{nanos:09d}"
 
 
 def _get_wrapper(proto_type: str) -> Type:
